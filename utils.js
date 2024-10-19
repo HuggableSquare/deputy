@@ -1,6 +1,6 @@
 import pino from 'pino';
 import path from 'node:path';
-import AdmZip from 'adm-zip';
+import { Open } from 'unzipper';
 import mime, { Mime } from 'mime';
 import poppler from 'poppler-simple';
 import { createHash } from 'node:crypto';
@@ -96,32 +96,33 @@ class Directory extends Entity {
 class File extends Entity {
   isDirectory = false;
 
-  getImages() {
+  async getImages() {
     if (this.path.endsWith('cbz')) {
-      const zip = new AdmZip(this.path);
-      return zip.getEntries()
-        .filter((entry) => !entry.isDirectory && !entry.name.startsWith('.'))
-        .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+      const zip = await Open.file(this.path);
+      const entries = zip.files
+        .filter((entry) => entry.type === 'File' && !path.basename(entry.path).startsWith('.'))
+        .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }))
+        .map((entry) => ({ type: mime.getType(entry.path), data: entry.buffer }));
+      return entries;
     }
 
     if (this.path.endsWith('pdf')) {
       const document = new poppler.PopplerDocument(this.path);
       return Array.from({ length: document.pageCount }, (_, i) => {
         return {
-          // TODO: instead of returning name, we should just return mime type
-          name: `${i}.jpg`,
-          getData() {
+          type: 'image/jpeg',
+          data() {
             const page = document.getPage(i + 1);
             const render = page.renderToBuffer('jpeg', 240);
             return render.data;
           }
-        }
+        };
       });
     }
   }
 
-  getImage(index) {
-    const images = this.getImages();
+  async getImage(index) {
+    const images = await this.getImages();
     return images[index];
   }
 
@@ -132,6 +133,11 @@ class File extends Entity {
   async init() {
     const { size } = await stat(this.path);
     this.size = size;
+
+    const images = await this.getImages();
+    this.numberOfImages = images.length;
+    this.imageType = images[0].type;
+
     return this;
   }
 
@@ -139,10 +145,6 @@ class File extends Entity {
     super(dirent);
     this.name = fileNameFormat(dirent);
     this.fileType = comicMime.getType(this.path);
-
-    const images = this.getImages();
-    this.numberOfImages = images.length;
-    this.imageType = mime.getType(images[0].name);
   }
 }
 

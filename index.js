@@ -15,19 +15,19 @@ app.get('/opds/f/:id', (req, res) => {
 });
 
 // page from file
-app.get('/opds/f/:id/:page', (req, res) => {
+app.get('/opds/f/:id/:page', async (req, res) => {
   const entity = entities.findById(req.params.id);
-  const image = entity.getImage(req.params.page);
-  res.type(image.name);
-  return res.send(image.getData());
+  const image = await entity.getImage(req.params.page);
+  res.type(image.type);
+  return res.send(await image.data());
 });
 
 // thumbnail
-app.get('/opds/t/:id', (req, res) => {
+app.get('/opds/t/:id', async (req, res) => {
   const entity = entities.findById(req.params.id);
-  const thumb = entity.getThumbnail();
-  res.type(thumb.name);
-  return res.send(thumb.getData());
+  const thumb = await entity.getThumbnail();
+  res.type(thumb.type);
+  return res.send(await thumb.data());
 });
 
 // directory
