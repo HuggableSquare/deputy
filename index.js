@@ -32,7 +32,7 @@ app.get('/opds/t/:id', async (req, res) => {
 
 // directory
 app.get('/opds/d/:id', (req, res) => {
-  const children = entities.getChildren(req.params.id);
+  const { children } = entities.findById(req.params.id);
 
   const entries = children.map((entity) => {
     const entry = [

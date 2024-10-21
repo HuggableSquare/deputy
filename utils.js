@@ -21,18 +21,12 @@ export class Entities extends Array {
     return this.find((entity) => entity.id === id);
   }
 
-  getChildren(id) {
-    if (id === 'index') {
-      return this.filter(({ parent }) => parent === id);
-    }
-    const { children } = this.findById(id);
-    return children;
-  }
-
   async init() {
-    console.time('init')
-    this.push(...await readFolder(dir));
-    console.timeEnd('init')
+    console.time('init');
+    const { dir: dirname, base } = path.parse(dir);
+    const index = await new Directory({ name: base, path: dirname }).init();
+    this.push(...index.flat());
+    console.timeEnd('init');
     return this;
   }
 }
@@ -44,9 +38,11 @@ class Entity {
   path;
 
   constructor(dirent) {
-    this.path = `${dirent.path}/${dirent.name}`;
+    this.path = path.join(dirent.path, dirent.name);
     this.id = createId(this.path);
-    this.parent = createId(dirent.path);
+    if (this.id !== 'index') {
+      this.parent = createId(dirent.path);
+    }
   }
 }
 
@@ -168,5 +164,5 @@ async function readFolder(dir) {
     return new type(ent).init();
   }));
 
-  return entities.flatMap((entities) => entities);
+  return entities.flat();
 }
