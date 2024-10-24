@@ -62,9 +62,10 @@ app.get('/opds/d/:id', (req, res) => {
         {
           link: [{
             _attr: {
-              type: 'application/atom+xml; profile=opds-catalog; kind=navigation',
+              type: 'application/atom+xml; profile=opds-catalog; kind=acquisition',
               rel: 'subsection',
-              href: `/opds/d/${entity.id}`
+              href: `/opds/d/${entity.id}`,
+              'thr:count': entity.numberOfChildren
             }
           }]
         },
@@ -103,7 +104,7 @@ app.get('/opds/d/:id', (req, res) => {
         _attr: {
           'xmlns:atom': 'http://www.w3.org/2005/Atom',
           'xmlns:opds': 'http://opds-spec.org/2010/acquisition',
-          'xmlns:dc': 'http://purl.org/dc/terms/',
+          'xmlns:thr': 'http://purl.org/syndication/thread/1.0',
           'xmlns:pse': 'http://vaemendis.net/opds-pse/ns'
         }
       },
