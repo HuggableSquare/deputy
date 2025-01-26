@@ -6,7 +6,7 @@ import poppler from 'poppler-simple';
 import { createExtractorFromData } from 'node-unrar-js';
 import { readdir, readFile, stat } from 'node:fs/promises';
 
-export const logger = pino();
+export const logger = pino({ level: process.env.PINO_LOG_LEVEL || 'info' });
 // TODO: make this configurable
 const dir = 'books';
 
