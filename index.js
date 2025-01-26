@@ -32,12 +32,13 @@ app.get('/opds/t/:id', async (req, res) => {
 
 // directory
 app.get('/opds/d/:id', (req, res) => {
-  const { children, name } = entities.findById(req.params.id);
+  const { children, name, updated } = entities.findById(req.params.id);
 
   const entries = children.map((entity) => {
     const entry = [
       { id: entity.id },
       { title: entity.name },
+      { updated: entity.updated.toISOString() },
       { 
         link: [{
           _attr: {
@@ -111,6 +112,7 @@ app.get('/opds/d/:id', (req, res) => {
       { id: req.params.id },
       { title: name },
       { author: [ { name: 'deputy' }, { uri: 'https://github.com/huggablesquare/deputy' } ] },
+      { updated: updated.toISOString() },
       ...entries
     ]
   });

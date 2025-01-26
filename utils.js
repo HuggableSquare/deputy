@@ -91,6 +91,7 @@ class Directory extends Entity {
     if (this.numberOfChildren === 0) return [];
     const { imageType } = this.getFileForThumbnail();
     this.imageType = imageType;
+    this.updated = new Date(Math.max(...this.children.map(({ updated }) => updated)));
     return [this, ...entities];
   }
 
@@ -108,8 +109,9 @@ class File extends Entity {
   }
 
   async init() {
-    const { size } = await super.init();
+    const { mtime, size } = await super.init();
     this.size = size;
+    this.updated = mtime;
     return this;
   }
 
