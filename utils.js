@@ -62,10 +62,14 @@ class Directory extends Entity {
 
   async #read() {
     const ents = await readdir(this.path, { withFileTypes: true });
-    const entities = await Promise.all(ents.flatMap((ent) => {
+    const entities = await Promise.all(ents.map((ent) => {
       const type = ent.isDirectory() ? Directory : fileTypes.find((type) => path.extname(ent.name) === type.fileExt);
       if (!type) return [];
-      return new type(ent, this.id).init();
+      // if initializing a file fails, just exclude it from the list
+      return new type(ent, this.id).init().catch(() => {
+        logger.debug({ msg: 'file failed to initialize', ent });
+        return [];
+      });
     }));
 
     return entities
@@ -116,7 +120,6 @@ class File extends Entity {
   }
 
   constructor(dirent, parent) {
-    logger.debug(dirent);
     super(dirent, parent);
     this.name = fileNameFormat(dirent);
   }
