@@ -116,6 +116,7 @@ class File extends Entity {
   }
 
   constructor(dirent, parent) {
+    logger.debug(dirent);
     super(dirent, parent);
     this.name = fileNameFormat(dirent);
   }
