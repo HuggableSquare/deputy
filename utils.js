@@ -1,15 +1,9 @@
+import mime from 'mime';
 import pino from 'pino';
 import path from 'node:path';
 import { Open } from 'unzipper';
-import mime, { Mime } from 'mime';
 import poppler from 'poppler-simple';
 import { readdir, stat } from 'node:fs/promises';
-
-const comicMime = new Mime({
-  'application/vnd.comicbook+zip': ['cbz'],
-  'application/vnd.comicbook-rar': ['cbr'],
-  'application/pdf': ['pdf']
-});
 
 export const logger = pino();
 // TODO: make this configurable
@@ -66,11 +60,10 @@ class Directory extends Entity {
   }
 
   async #read() {
-    const ents = (await readdir(this.path, { withFileTypes: true }))
-      .filter((ent) => ent.isDirectory() || ent.name.endsWith('cbz') || ent.name.endsWith('pdf'));
-
-    const entities = await Promise.all(ents.map((ent) => {
-      const type = ent.isDirectory() ? Directory : File;
+    const ents = await readdir(this.path, { withFileTypes: true });
+    const entities = await Promise.all(ents.flatMap((ent) => {
+      const type = ent.isDirectory() ? Directory : fileTypes.find((type) => path.extname(ent.name) === type.fileExt);
+      if (!type) return [];
       return new type(ent, this.id).init();
     }));
 
@@ -109,36 +102,6 @@ class Directory extends Entity {
 class File extends Entity {
   isDirectory = false;
 
-  async getImages() {
-    if (this.path.endsWith('cbz')) {
-      const zip = await Open.file(this.path);
-      const entries = zip.files
-        .filter((entry) => entry.type === 'File' && !path.basename(entry.path).startsWith('.'))
-        .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }))
-        .map((entry) => ({ type: mime.getType(entry.path), data: entry.buffer }));
-      return entries;
-    }
-
-    if (this.path.endsWith('pdf')) {
-      const document = new poppler.PopplerDocument(this.path);
-      return Array.from({ length: document.pageCount }, (_, i) => {
-        return {
-          type: 'image/jpeg',
-          data() {
-            const page = document.getPage(i + 1);
-            const render = page.renderToBuffer('jpeg', 240);
-            return render.data;
-          }
-        };
-      });
-    }
-  }
-
-  async getImage(index) {
-    const images = await this.getImages();
-    return images[index];
-  }
-
   getThumbnail() {
     return this.getImage(0);
   }
@@ -146,20 +109,59 @@ class File extends Entity {
   async init() {
     const { size } = await super.init();
     this.size = size;
-
-    const images = await this.getImages();
-    this.numberOfImages = images.length;
-    this.imageType = images[0].type;
-
     return this;
   }
 
   constructor(dirent, parent) {
     super(dirent, parent);
     this.name = fileNameFormat(dirent);
-    this.fileType = comicMime.getType(this.path);
   }
 }
+
+class CBZFile extends File {
+  static fileExt = '.cbz';
+  fileType = 'application/vnd.comicbook+zip';
+
+  async getImages() {
+    const zip = await Open.file(this.path);
+    return zip.files
+      .filter((entry) => entry.type === 'File' && !path.basename(entry.path).startsWith('.'))
+      .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }));
+  }
+
+  async getImage(index) {
+    const images = await this.getImages();
+    const image = images[index];
+    return { type: mime.getType(image.path), data: await image.buffer() };
+  }
+
+  async init() {
+    const images = await this.getImages();
+    this.numberOfImages = images.length;
+    this.imageType = mime.getType(images[0].path);
+    return super.init();
+  }
+}
+
+class PDFFile extends File {
+  static fileExt = '.pdf';
+  fileType = 'application/pdf';
+  imageType = 'image/jpeg';
+
+  async getImage(index) {
+    const page = this.document.getPage(Number(index) + 1);
+    const { data } = await page.renderToBufferAsync('jpeg', 240);
+    return { type: 'image/jpeg', data };
+  }
+
+  constructor(dirent, parent) {
+    super(dirent, parent);
+    this.document = new poppler.PopplerDocument(this.path);
+    this.numberOfImages = this.document.pageCount;
+  }
+}
+
+const fileTypes = [CBZFile, PDFFile];
 
 function fileNameFormat(ent) {
   const { name } = path.parse(ent.name);

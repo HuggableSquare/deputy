@@ -19,7 +19,7 @@ app.get('/opds/f/:id/:page', async (req, res) => {
   const entity = entities.findById(req.params.id);
   const image = await entity.getImage(req.params.page);
   res.type(image.type);
-  return res.send(await image.data());
+  return res.send(image.data);
 });
 
 // thumbnail
@@ -27,7 +27,7 @@ app.get('/opds/t/:id', async (req, res) => {
   const entity = entities.findById(req.params.id);
   const thumb = await entity.getThumbnail();
   res.type(thumb.type);
-  return res.send(await thumb.data());
+  return res.send(thumb.data);
 });
 
 // directory
