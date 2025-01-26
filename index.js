@@ -32,7 +32,7 @@ app.get('/opds/t/:id', async (req, res) => {
 
 // directory
 app.get('/opds/d/:id', (req, res) => {
-  const { children } = entities.findById(req.params.id);
+  const { children, name } = entities.findById(req.params.id);
 
   const entries = children.map((entity) => {
     const entry = [
@@ -109,7 +109,7 @@ app.get('/opds/d/:id', (req, res) => {
         }
       },
       { id: req.params.id },
-      { title: 'Comics' },
+      { title: name },
       { author: [ { name: 'deputy' }, { uri: 'https://github.com/huggablesquare/deputy' } ] },
       ...entries
     ]
