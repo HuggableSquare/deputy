@@ -3,7 +3,8 @@ import pino from 'pino';
 import path from 'node:path';
 import { Open } from 'unzipper';
 import poppler from 'poppler-simple';
-import { readdir, stat } from 'node:fs/promises';
+import { createExtractorFromData } from 'node-unrar-js';
+import { readdir, readFile, stat } from 'node:fs/promises';
 
 export const logger = pino();
 // TODO: make this configurable
@@ -143,6 +144,41 @@ class CBZFile extends File {
   }
 }
 
+class CBRFile extends File {
+  static fileExt = '.cbr';
+  fileType = 'application/vnd.comicbook-rar';
+
+  async getImages() {
+    const data = await readFile(this.path);
+    const extractor = await createExtractorFromData({ data });
+    const list = extractor.getFileList();
+    return [...list.fileHeaders]
+      .filter((entry) => !entry.flags.directory && !path.basename(entry.name).startsWith('.'))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+      .map(({ name }) => ({
+        name,
+        extract() {
+          const extracted = extractor.extract({ files: [name] });
+          const files = [...extracted.files].map(({ extraction }) => Buffer.from(extraction));
+          return files[0];
+        }
+      }));
+  }
+
+  async getImage(index) {
+    const images = await this.getImages();
+    const image = images[index];
+    return { type: mime.getType(image.name), data: image.extract() };
+  }
+
+  async init() {
+    const images = await this.getImages();
+    this.numberOfImages = images.length;
+    this.imageType = mime.getType(images[0].name);
+    return super.init();
+  }
+}
+
 class PDFFile extends File {
   static fileExt = '.pdf';
   fileType = 'application/pdf';
@@ -161,7 +197,7 @@ class PDFFile extends File {
   }
 }
 
-const fileTypes = [CBZFile, PDFFile];
+const fileTypes = [CBZFile, CBRFile, PDFFile];
 
 function fileNameFormat(ent) {
   const { name } = path.parse(ent.name);
