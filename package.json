@@ -2,7 +2,7 @@
   "name": "deputy",
   "version": "1.0.0",
   "main": "index.js",
-  "license": "None",
+  "license": "UNLICENSED",
   "type": "module",
   "dependencies": {
     "express": "^4.18.2",
