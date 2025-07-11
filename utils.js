@@ -132,7 +132,11 @@ class CBZFile extends File {
   async getImages() {
     const zip = await Open.file(this.path);
     return zip.files
-      .filter((entry) => entry.type === 'File' && !path.basename(entry.path).startsWith('.'))
+      .filter((entry) => {
+        return entry.type === 'File' &&
+          !path.basename(entry.path).startsWith('.') &&
+          mime.getType(entry.path)?.startsWith('image');
+      })
       .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }));
   }
 
@@ -159,7 +163,11 @@ class CBRFile extends File {
     const extractor = await createExtractorFromData({ data });
     const list = extractor.getFileList();
     return [...list.fileHeaders]
-      .filter((entry) => !entry.flags.directory && !path.basename(entry.name).startsWith('.'))
+      .filter((entry) => {
+        return !entry.flags.directory &&
+          !path.basename(entry.name).startsWith('.') &&
+          mime.getType(entry.name)?.startsWith('image');
+      })
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
       .map(({ name }) => ({
         name,
