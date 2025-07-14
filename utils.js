@@ -17,9 +17,9 @@ export class Entities extends Array {
 
   async init() {
     console.time('init');
-    const { dir: dirname, base } = path.parse(dir);
+    const { dir: parentPath, base: name } = path.parse(dir);
     const stats = await stat(dir);
-    const index = await new Directory({ name: base, path: dirname }, stats).init();
+    const index = await new Directory({ parentPath, name }, stats).init();
     this.push(...index.flat());
     console.timeEnd('init');
     return this;
@@ -37,7 +37,7 @@ class Entity {
   }
 
   constructor(dirent, stats, parent) {
-    this.path = path.join(dirent.path, dirent.name);
+    this.path = path.join(dirent.parentPath, dirent.name);
     this.parent = parent;
 
     const { ino, birthtimeMs } = stats;
@@ -66,7 +66,7 @@ class Directory extends Entity {
     const entities = await Promise.all(ents.map(async (ent) => {
       const type = ent.isDirectory() ? Directory : fileTypes.find((type) => path.extname(ent.name) === type.fileExt);
       if (!type) return [];
-      const stats = await stat(path.join(ent.path, ent.name));
+      const stats = await stat(path.join(ent.parentPath, ent.name));
       // if initializing a file fails, just exclude it from the list
       return new type(ent, this.id, stats).init().catch(() => {
         logger.debug({ msg: 'file failed to initialize', ent });
@@ -213,5 +213,5 @@ const fileTypes = [CBZFile, CBRFile, PDFFile];
 
 function fileNameFormat(ent) {
   const { name } = path.parse(ent.name);
-  return name.replace(path.basename(ent.path), '').trim();
+  return name.replace(path.basename(ent.parentPath), '').trim();
 }
