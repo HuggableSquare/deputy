@@ -18,7 +18,8 @@ export class Entities extends Array {
   async init() {
     console.time('init');
     const { dir: dirname, base } = path.parse(dir);
-    const index = await new Directory({ name: base, path: dirname }).init();
+    const stats = await stat(dir);
+    const index = await new Directory({ name: base, path: dirname }, stats).init();
     this.push(...index.flat());
     console.timeEnd('init');
     return this;
@@ -31,16 +32,16 @@ class Entity {
   parent;
   path;
 
-  async init() {
-    const stats = await stat(this.path);
-    const { ino, birthtimeMs } = stats;
-    this.id = this.parent ? `I${ino}D${birthtimeMs}` : 'index';
-    return stats;
+  init() {
+    return this;
   }
 
-  constructor(dirent, parent) {
+  constructor(dirent, stats, parent) {
     this.path = path.join(dirent.path, dirent.name);
     this.parent = parent;
+
+    const { ino, birthtimeMs } = stats;
+    this.id = this.parent ? `I${ino}D${birthtimeMs}` : 'index';
   }
 }
 
@@ -62,11 +63,12 @@ class Directory extends Entity {
 
   async #read() {
     const ents = await readdir(this.path, { withFileTypes: true });
-    const entities = await Promise.all(ents.map((ent) => {
+    const entities = await Promise.all(ents.map(async (ent) => {
       const type = ent.isDirectory() ? Directory : fileTypes.find((type) => path.extname(ent.name) === type.fileExt);
       if (!type) return [];
+      const stats = await stat(path.join(ent.path, ent.name));
       // if initializing a file fails, just exclude it from the list
-      return new type(ent, this.id).init().catch(() => {
+      return new type(ent, this.id, stats).init().catch(() => {
         logger.debug({ msg: 'file failed to initialize', ent });
         return [];
       });
@@ -87,7 +89,6 @@ class Directory extends Entity {
   }
 
   async init() {
-    await super.init();
     const entities = await this.#read();
     this.numberOfChildren = entities.filter(({ isDirectory }) => !isDirectory).length;
     this.children = entities.filter(({ parent }) => parent === this.id);
@@ -99,8 +100,8 @@ class Directory extends Entity {
     return [this, ...entities];
   }
 
-  constructor(dirent, parent) {
-    super(dirent, parent);
+  constructor(dirent, stats, parent) {
+    super(dirent, stats, parent);
     this.name = dirent.name;
   }
 }
@@ -112,16 +113,13 @@ class File extends Entity {
     return this.getImage(0);
   }
 
-  async init() {
-    const { mtime, size } = await super.init();
+  constructor(dirent, stats, parent) {
+    super(dirent, stats, parent);
+    this.name = fileNameFormat(dirent);
+
+    const { mtime, size } = stats;
     this.size = size;
     this.updated = mtime;
-    return this;
-  }
-
-  constructor(dirent, parent) {
-    super(dirent, parent);
-    this.name = fileNameFormat(dirent);
   }
 }
 
@@ -150,7 +148,7 @@ class CBZFile extends File {
     const images = await this.getImages();
     this.numberOfImages = images.length;
     this.imageType = mime.getType(images[0].path);
-    return super.init();
+    return this;
   }
 }
 
@@ -189,7 +187,7 @@ class CBRFile extends File {
     const images = await this.getImages();
     this.numberOfImages = images.length;
     this.imageType = mime.getType(images[0].name);
-    return super.init();
+    return this;
   }
 }
 
@@ -204,8 +202,8 @@ class PDFFile extends File {
     return { type: 'image/jpeg', data };
   }
 
-  constructor(dirent, parent) {
-    super(dirent, parent);
+  constructor(dirent, stats, parent) {
+    super(dirent, stats, parent);
     this.document = new poppler.PopplerDocument(this.path);
     this.numberOfImages = this.document.pageCount;
   }
