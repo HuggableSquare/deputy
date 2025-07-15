@@ -103,14 +103,17 @@ class Directory extends Entity {
     this.children = entities
       .filter(({ parent }) => parent === this.id)
       .sort((a, b) => {
+        // directories before files
         if (a.isDirectory !== b.isDirectory) {
           return b.isDirectory - a.isDirectory;
         }
-        // sort volumes before singles
-        if (a.name.startsWith('Vol') && !b.name.startsWith('Vol')) {
-          return -1;
-        }
-        return a.path.localeCompare(b.path, undefined, { numeric: true });
+
+        // volumes before singles
+        const aIsVol = a.name.startsWith('Vol');
+        const bIsVol = b.name.startsWith('Vol');
+        if (aIsVol !== bIsVol) return bIsVol - aIsVol;
+
+        return a.name.localeCompare(b.name, undefined, { numeric: true });
       });
     this.updated = new Date(Math.max(...this.children.map(({ updated }) => updated)));
     return [this, ...entities];
