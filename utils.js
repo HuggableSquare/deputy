@@ -19,7 +19,7 @@ export class Entities extends Array {
     console.time('init');
     const { dir: parentPath, base: name } = path.parse(dir);
     const stats = await stat(dir);
-    const index = await new Directory({ parentPath, name }, stats).init();
+    const index = await new Directory({ parentPath, name }, stats).load();
     this.push(...index.flat());
     console.timeEnd('init');
     return this;
@@ -48,30 +48,34 @@ class Entity {
 class Directory extends Entity {
   isDirectory = true;
 
-  // BUG: this errors if the directory is empty
-  getFileForThumbnail() {
-    const file = this.children.find(({ isDirectory }) => !isDirectory);
-    if (file) return file;
+  async getFileForThumbnail() {
+    // find a child file that isn't broken
+    for (const child of this.children) {
+      if (child.isDirectory) continue;
+      const file = await child.init();
+      if (file) return file;
+    }
+
     const directory = this.children.find(({ isDirectory }) => isDirectory);
     return directory.getFileForThumbnail();
   }
 
-  getThumbnail() {
-    const file = this.getFileForThumbnail();
+  async getThumbnail() {
+    const file = await this.getFileForThumbnail();
     return file.getThumbnail();
   }
 
   async #read() {
     const ents = await readdir(this.path, { withFileTypes: true });
     const entities = await Promise.all(ents.map(async (ent) => {
-      const type = ent.isDirectory() ? Directory : fileTypes.find((type) => path.extname(ent.name) === type.fileExt);
+      if (ent.isDirectory()) {
+        const stats = await stat(path.join(ent.parentPath, ent.name));
+        return new Directory(ent, stats, this.id).load();
+      }
+      const type = fileTypes.find((type) => path.extname(ent.name) === type.fileExt);
       if (!type) return [];
       const stats = await stat(path.join(ent.parentPath, ent.name));
-      // if initializing a file fails, just exclude it from the list
-      return new type(ent, this.id, stats).init().catch(() => {
-        logger.debug({ msg: 'file failed to initialize', ent });
-        return [];
-      });
+      return new type(ent, stats, this.id);
     }));
 
     return entities
@@ -88,14 +92,26 @@ class Directory extends Entity {
       });
   }
 
+  async getChildren() {
+    const children = await Promise.all(this.children.map((child) => child.init()));
+    return children.filter((child) => child);
+  }
+
   async init() {
+    if (!this.imageType) {
+      const file = await this.getFileForThumbnail();
+      this.imageType = file.imageType;
+    }
+
+    return this;
+  }
+
+  async load() {
     const entities = await this.#read();
     this.numberOfChildren = entities.filter(({ isDirectory }) => !isDirectory).length;
-    this.children = entities.filter(({ parent }) => parent === this.id);
     // if the folder has no children, don't bother putting it in the list
     if (this.numberOfChildren === 0) return [];
-    const { imageType } = this.getFileForThumbnail();
-    this.imageType = imageType;
+    this.children = entities.filter(({ parent }) => parent === this.id);
     this.updated = new Date(Math.max(...this.children.map(({ updated }) => updated)));
     return [this, ...entities];
   }
@@ -145,10 +161,17 @@ class CBZFile extends File {
   }
 
   async init() {
-    const images = await this.getImages();
-    this.numberOfImages = images.length;
-    this.imageType = mime.getType(images[0].path);
-    return this;
+    if (this.isBroken) return;
+    if (this.numberOfImages && this.imageType) return this;
+    try {
+      const images = await this.getImages();
+      this.numberOfImages = images.length;
+      this.imageType = mime.getType(images[0].path);
+      return this;
+    } catch (e) {
+      this.isBroken = true;
+      logger.debug(e, `file failed to initialize: ${this.path}`);
+    }
   }
 }
 
@@ -184,10 +207,17 @@ class CBRFile extends File {
   }
 
   async init() {
-    const images = await this.getImages();
-    this.numberOfImages = images.length;
-    this.imageType = mime.getType(images[0].name);
-    return this;
+    if (this.isBroken) return;
+    if (this.numberOfImages && this.imageType) return this;
+    try {
+      const images = await this.getImages();
+      this.numberOfImages = images.length;
+      this.imageType = mime.getType(images[0].name);
+      return this;
+    } catch (e) {
+      this.isBroken = true;
+      logger.debug(e, `file failed to initialize: ${this.path}`);
+    }
   }
 }
 

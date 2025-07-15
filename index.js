@@ -49,12 +49,13 @@ app.get('/opds/t/:id', async (req, res) => {
 });
 
 // directory
-app.get('/opds/d/:id', (req, res) => {
+app.get('/opds/d/:id', async (req, res) => {
   try {
     const directory = entities.findById(req.params.id);
     if (!directory) return res.status(404).send();
+    const children = await directory.getChildren();
 
-    const entries = directory.children.map((entity) => {
+    const entries = children.map((entity) => {
       const entry = [
         { id: entity.id },
         { title: entity.name },
