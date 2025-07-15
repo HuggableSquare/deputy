@@ -246,5 +246,11 @@ const fileTypes = [CBZFile, CBRFile, PDFFile];
 
 function fileNameFormat(ent) {
   const { name } = path.parse(ent.name);
-  return name.replace(path.basename(ent.parentPath), '').trim();
+  const parent = path.basename(ent.parentPath);
+  const str = name.replaceAll(/\(\D*\)/g, '').trim();
+  if (str.startsWith(parent)) return str.replace(parent, '').trim();
+
+  const n = parent.match(/^(.+) (\(\d+\))/)?.[1] || parent;
+  const rx = new RegExp(`^${n}`);
+  return str.replace(rx, '').trim();
 }
