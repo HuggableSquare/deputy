@@ -78,18 +78,7 @@ class Directory extends Entity {
       return new type(ent, stats, this.id);
     }));
 
-    return entities
-      .flat()
-      .sort((a, b) => {
-        if (a.isDirectory !== b.isDirectory) {
-          return b.isDirectory - a.isDirectory;
-        }
-        // sort volumes before singles
-        if (a.name.startsWith('Vol') && !b.name.startsWith('Vol')) {
-          return -1;
-        }
-        return a.path.localeCompare(b.path, undefined, { numeric: true });
-      });
+    return entities.flat();
   }
 
   async getChildren() {
@@ -111,7 +100,18 @@ class Directory extends Entity {
     this.numberOfChildren = entities.filter(({ isDirectory }) => !isDirectory).length;
     // if the folder has no children, don't bother putting it in the list
     if (this.numberOfChildren === 0) return [];
-    this.children = entities.filter(({ parent }) => parent === this.id);
+    this.children = entities
+      .filter(({ parent }) => parent === this.id)
+      .sort((a, b) => {
+        if (a.isDirectory !== b.isDirectory) {
+          return b.isDirectory - a.isDirectory;
+        }
+        // sort volumes before singles
+        if (a.name.startsWith('Vol') && !b.name.startsWith('Vol')) {
+          return -1;
+        }
+        return a.path.localeCompare(b.path, undefined, { numeric: true });
+      });
     this.updated = new Date(Math.max(...this.children.map(({ updated }) => updated)));
     return [this, ...entities];
   }
